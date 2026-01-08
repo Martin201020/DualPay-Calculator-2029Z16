@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DualPay Calculator PWA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Comfortaa:wght@700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="data:application/manifest+json,{%22name%22:%22DualPay%20Calc%22,%22short_name%22:%22DualPay%22,%22start_url%22:%22.%22,%22display%22:%22standalone%22,%22background_color%22:%22#1e293b%22}">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; overflow: hidden; }
+        h1 { font-family: 'Comfortaa', cursive; }
+        
+        /* Динамичен фон с плаващи фигури */
+        .bg-pattern {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; z-index: -1;
+            display: grid; grid-template-columns: repeat(10, 1fr); opacity: 0.08;
+        }
+        .shape {
+            font-size: 2rem; color: #38bdf8; text-align: center;
+            animation: float 10s infinite ease-in-out;
+        }
+        @keyframes float {
+            0%, 100% { transform: translate(0,0) rotate(0deg) scale(1); }
+            50% { transform: translate(20px, -20px) rotate(10deg) scale(1.1); }
+        }
+
+        /* Стъклен ефект (Glassmorphism) */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+    </style>
+</head>
+<body class="text-white min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-pattern" id="bgPattern"></div>
+
+    <div class="glass-panel w-full max-auto max-w-md rounded-3xl p-8 space-y-6">
+        <header class="text-center space-y-2">
+            <div class="inline-block p-3 bg-sky-500 rounded-2xl shadow-lg mb-2">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"></path></svg>
+            </div>
+            <h1 class="text-3xl text-sky-400">DualPay</h1>
+        </header>
+
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold mb-1">Сумa за плащане</label>
+                <div class="flex">
+                    <input type="number" id="totalAmount" class="w-full bg-slate-800/50 rounded-l-xl p-3 outline-none border-y border-l border-white/10" placeholder="0.00">
+                    <select id="totalCurrency" class="bg-sky-600 rounded-r-xl px-3 font-bold border-y border-r border-white/10">
+                        <option value="BGN">BGN</option>
+                        <option value="EUR">EUR</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs mb-1">Платено в лв.</label>
+                    <input type="number" id="paidBGN" class="w-full bg-slate-800/50 rounded-xl p-3 outline-none border border-white/10" placeholder="0.00">
+                </div>
+                <div>
+                    <label class="block text-xs mb-1">Платено в €</label>
+                    <input type="number" id="paidEUR" class="w-full bg-slate-800/50 rounded-xl p-3 outline-none border border-white/10" placeholder="0.00">
+                </div>
+            </div>
+        </div>
+
+        <div id="errorBox" class="hidden bg-red-500/80 p-3 rounded-xl text-sm text-center font-bold">Недостатъчна сума!</div>
+
+        <div id="resultArea" class="hidden space-y-3 transition-all duration-500">
+            <div class="text-center p-4 bg-sky-500/20 rounded-2xl border border-sky-400/30">
+                <p class="text-sm text-sky-300">Дължимо ресто</p>
+                <div class="text-4xl font-bold my-1" id="mainChangeText">0.00 €</div>
+                <div class="text-sm text-white/60" id="subChangeText">Равно на 0.00 лв.</div>
+            </div>
+        </div>
+
+        <footer class="pt-4 border-t border-white/10 text-center text-[10px] text-white/40">
+            <p>Курс: 1 EUR = 1.95583 BGN</p>
+            <p>Име © 2026</p>
+        </footer>
+    </div>
+
+    <script>
+        const RATE = 1.95583;
+
+        // Генератор на символи за фона
+        const bg = document.getElementById('bgPattern');
+        const symbols = ['€', 'лв', '⇄', '±', '$'];
+        for(let i=0; i<40; i++) {
+            const div = document.createElement('div');
+            div.className = 'shape';
+            div.innerText = symbols[Math.floor(Math.random()*symbols.length)];
+            div.style.animationDelay = (Math.random() * 5) + 's';
+            bg.appendChild(div);
+        }
+
+        // Автоматично смятане в реално време
+        const inputs = ['totalAmount', 'paidBGN', 'paidEUR', 'totalCurrency'];
+        inputs.forEach(id => document.getElementById(id).addEventListener('input', calculate));
+
+        function calculate() {
+            const total = parseFloat(document.getElementById('totalAmount').value) || 0;
+            const currency = document.getElementById('totalCurrency').value;
+            const bgn = parseFloat(document.getElementById('paidBGN').value) || 0;
+            const eur = parseFloat(document.getElementById('paidEUR').value) || 0;
+
+            const totalInBgn = (currency === 'EUR') ? total * RATE : total;
+            const paidInBgn = bgn + (eur * RATE);
+            const changeInBgn = paidInBgn - totalInBgn;
+
+            const resArea = document.getElementById('resultArea');
+            const errBox = document.getElementById('errorBox');
+
+            if (total > 0 && paidInBgn < totalInBgn) {
+                errBox.classList.remove('hidden');
+                resArea.classList.add('hidden');
+            } else if (total > 0) {
+                errBox.classList.add('hidden');
+                resArea.classList.remove('hidden');
+                
+                const changeInEur = changeInBgn / RATE;
+                document.getElementById('mainChangeText').innerText = changeInEur.toFixed(2) + ' €';
+                document.getElementById('subChangeText').innerText = 'Равно на ' + changeInBgn.toFixed(2) + ' лв.';
+            }
+        }
+    </script>
+</body>
+</html>
